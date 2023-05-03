@@ -8,6 +8,19 @@ public static class DefinitionExtensions
     public static void AddDefinitions(this IServiceCollection services, WebApplicationBuilder builder,
         params Type[] entryPointsAssembly)
     {
+        var definitions = GetDefinitionByAssembly(entryPointsAssembly);
+        definitions.ForEach(definition => definition.ConfigureServicesAsync(services, builder));
+        services.AddSingleton(definitions as IReadOnlyCollection<IDefinition>);
+    }
+
+    public static void AddDefinitionsToCollection(this WebApplicationBuilder builder, params Type[] entryPointsAssembly)
+    {
+        var definitions = GetDefinitionByAssembly(entryPointsAssembly);
+        builder.Services.AddSingleton(definitions as IReadOnlyCollection<IDefinition>);
+    }
+
+    private static List<IDefinition> GetDefinitionByAssembly(Type[] entryPointsAssembly)
+    {
         var definitions = new List<IDefinition>();
 
         foreach (var entryPoint in entryPointsAssembly)
@@ -19,8 +32,7 @@ public static class DefinitionExtensions
             definitions.AddRange(list);
         }
 
-        definitions.ForEach(definition => definition.ConfigureServicesAsync(services, builder));
-        services.AddSingleton(definitions as IReadOnlyCollection<IDefinition>);
+        return definitions;
     }
 
     public static void UseDefinitions(this WebApplication application)
@@ -29,6 +41,26 @@ public static class DefinitionExtensions
         foreach (var endpoint in definitions)
         {
             endpoint.ConfigureApplicationAsync(application);
+        }
+    }
+
+    public static void AddDefinitionByType(this WebApplicationBuilder builder, params Type[] definitionTypes)
+    {
+        using (ServiceProvider serviceProvider = builder.Services.BuildServiceProvider())
+        {
+            var collection = serviceProvider.GetService<IReadOnlyCollection<IDefinition>>()
+                .Where(x => definitionTypes.Any(o => o == x. GetType())).ToList();
+            collection.ForEach(x => x.ConfigureServicesAsync(builder.Services, builder));
+        }
+    }
+    
+    public static void UseDefinitionByType(this WebApplication application, params Type[] definitionTypes)
+    {
+        using (var scope = application.Services.CreateScope())
+        {
+            var collection = scope.ServiceProvider.GetService<IReadOnlyCollection<IDefinition>>()
+                .Where(x => definitionTypes.Any(o => o == x. GetType())).ToList();
+            collection.ForEach(x => x.ConfigureApplicationAsync(application));
         }
     }
 }
